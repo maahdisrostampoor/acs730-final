@@ -91,9 +91,6 @@ resource "aws_instance" "bastion" {
   subnet_id                   = data.terraform_remote_state.publicSubnet.outputs.publicSubnetID[1]
   security_groups             = [module.SecurityGroup.public_security_group_id]
   associate_public_ip_address = true
-  lifecycle {
-    create_before_destroy = true
-  }
   tags = merge(local.defaultTags,
     {
       "Name" = "${local.namePrefix}-bastion"
