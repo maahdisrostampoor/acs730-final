@@ -1,0 +1,9 @@
+.git
+.terraform*
+prod/network/.terraform*
+prod/webservers/.terraform*
+prod/webservers/Group2-Prod-PrivateVm*
+prod/webservers/Group2-Prod-Bastion*
+prod/webservers/Group2-Prod*
+
+  
