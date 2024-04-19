@@ -24,12 +24,13 @@ data "terraform_remote_state" "publicSubnet" {
 }
 
 # Module to deploy basic networking 
-module "publicSecurityGroup" {
+module "SecurityGroup" {
   source = "../../Modules/aws_security_group"
   #source              = "git@github.com:Dhansca/aws_network.git"
   env                = var.env
   prefix             = var.prefix
   defaultTags        = var.defaultTags
+  instance_ip        = aws_instance.bastion.private_ip
 } 
 
 # Data source for AMI id
@@ -59,7 +60,7 @@ resource "aws_instance" "webServer" {
   ami                         = data.aws_ami.latestAmazonLinux.id
   instance_type               = lookup(var.instanceType, var.env)
   key_name                    = aws_key_pair.webServerKey.key_name
-  security_groups             = [module.publicSecurityGroup.security_group_id]
+  security_groups             = [module.SecurityGroup.public_security_group_id]
   subnet_id                   = element(data.terraform_remote_state.publicSubnet.outputs.publicSubnetID, var.selected_subnets[count.index])
   associate_public_ip_address = true
   user_data = templatefile("${path.module}/install_httpd.sh",
@@ -88,7 +89,7 @@ resource "aws_instance" "bastion" {
   instance_type               = lookup(var.instanceType, var.env)
   key_name                    = aws_key_pair.bastionKey.key_name
   subnet_id                   = data.terraform_remote_state.publicSubnet.outputs.publicSubnetID[1]
-  security_groups             = [module.publicSecurityGroup.security_group_id]
+  security_groups             = [module.SecurityGroup.public_security_group_id]
   associate_public_ip_address = true
   lifecycle {
     create_before_destroy = true
@@ -112,7 +113,7 @@ resource "aws_instance" "privateVm" {
   ami                         = data.aws_ami.latestAmazonLinux.id
   instance_type               = lookup(var.instanceType, var.env)
   key_name                    = aws_key_pair.privateVmKey.key_name
-  security_groups             = [aws_security_group.privateSecurityGroup.id]
+  security_groups             = [module.SecurityGroup.private_security_group_id]
   subnet_id                   = data.terraform_remote_state.publicSubnet.outputs.privateSubnetID[count.index]
   tags = merge(local.defaultTags, {
       "Name" = "${local.namePrefix}-PrivateVM-${count.index+1}"
@@ -124,33 +125,4 @@ resource "aws_instance" "privateVm" {
 resource "aws_key_pair" "privateVmKey" {
   key_name   = "${local.namePrefix}-PrivateVm"
   public_key = file("${local.namePrefix}-PrivateVm.pub")
-}
-
-
-# Private Security Group
-resource "aws_security_group" "privateSecurityGroup" {
-  name        = "allowSshFromBastion"
-  description = "Allow SSH only from Bastion Host"
-  vpc_id      = data.terraform_remote_state.publicSubnet.outputs.vpcId
-
-  ingress {
-    description      = "SSH from only Bastion"
-    from_port        = 22
-    to_port          = 22
-    protocol         = "tcp"
-    cidr_blocks      = ["${aws_instance.bastion.private_ip}/32"]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.defaultTags,
-    {
-      "Name" = "${var.prefix}-${var.env}-private-sg"
-    }
-  )
 }
